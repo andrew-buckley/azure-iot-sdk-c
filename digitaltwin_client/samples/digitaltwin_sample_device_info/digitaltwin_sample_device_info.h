@@ -17,6 +17,7 @@ extern "C"
 DIGITALTWIN_INTERFACE_CLIENT_HANDLE DigitalTwinSampleDeviceInfo_CreateInterface(void);
 // Closes down resources associated with device info interface.
 void DigitalTwinSampleDeviceInfo_Close(DIGITALTWIN_INTERFACE_CLIENT_HANDLE interfaceHandle);
+void DeviceInfo_updateSwVersion(char* targetVersion);
 
 #ifdef __cplusplus
 }

@@ -83,7 +83,7 @@ static DIGITALTWIN_CLIENT_RESULT DigitalTwinSampleDeviceInfo_ReportSoftwareVersi
     if(DeviceInformation_SwVersionProperty(&swVersionPropertyValue) == RESULT_OK)
     {
         result = DigitalTwinSampleDeviceInfo_ReportPropertyAsync(interfaceHandle, digitaltwinSample_SoftwareVersionProperty, 
-                                                                 swVersionPropertyValue);
+                                                                 "\"1.0.0\"");
         free(swVersionPropertyValue);
     }
     else
@@ -345,3 +345,13 @@ void DigitalTwinSampleDeviceInfo_Close(DIGITALTWIN_INTERFACE_CLIENT_HANDLE inter
     // This is a no-op in this simple sample.
 }
 
+/**
+ * this method is only needed because this is a device emulator and not an actual device agent. 
+ * On a real device, the swVersion should update itself when the device installs the new software and reboots.
+ */ 
+void DeviceInfo_updateSwVersion(char* targetVersion)
+{
+    LogInfo("DEVICE_INFO: Updating property <%s> with <%s>", digitaltwinSample_SoftwareVersionProperty, targetVersion);
+    DigitalTwinSampleDeviceInfo_ReportPropertyAsync(digitaltwinSample_DeviceInfoState.interfaceClientHandle, digitaltwinSample_SoftwareVersionProperty, 
+                                                                 (const char*) targetVersion);
+}

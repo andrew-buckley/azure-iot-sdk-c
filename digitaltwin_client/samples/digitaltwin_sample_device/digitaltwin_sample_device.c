@@ -11,6 +11,7 @@
 // Core header files for C and IoTHub layer
 //
 #include <stdio.h>
+#include <stdlib.h>
 #include <iothub.h>
 #include <iothub_device_client.h>
 #include <iothub_client_options.h>
@@ -37,18 +38,21 @@
 //
 #include <../digitaltwin_sample_device_info/digitaltwin_sample_device_info.h>
 #include <../digitaltwin_sample_environmental_sensor/digitaltwin_sample_environmental_sensor.h>
+#include <../digitaltwin_sample_azure_device_update/digitaltwin_sample_azure_device_update.h>
 #include <../digitaltwin_sample_model_definition/digitaltwin_sample_model_definition.h>
 
 
 // Number of DigitalTwin Interfaces that this DigitalTwin Device supports.
 #ifdef ENABLE_MODEL_DEFINITION_INTERFACE
-#define DIGITALTWIN_SAMPLE_DEVICE_MAX_INTERFACES 3
+#define DIGITALTWIN_SAMPLE_DEVICE_MAX_INTERFACES 4
+#define DIGITALTWIN_SAMPLE_MODEL_DEFINITION_INDEX 2
+#define DIGITALTWIN_SAMPLE_AZURE_DEVICE_UPDATE_INDEX 3
 #else
-#define DIGITALTWIN_SAMPLE_DEVICE_MAX_INTERFACES 2
+#define DIGITALTWIN_SAMPLE_DEVICE_MAX_INTERFACES 3
+#define DIGITALTWIN_SAMPLE_AZURE_DEVICE_UPDATE_INDEX 2
 #endif
 #define DIGITALTWIN_SAMPLE_DEVICE_INFO_INDEX 0
 #define DIGITALTWIN_SAMPLE_ENVIRONMENTAL_SENSOR_INDEX 1
-#define DIGITALTWIN_SAMPLE_MODEL_DEFINITION_INDEX 2
 
 // Amount to sleep between querying state from the register interface loop
 static const int digitalTwinSampleDevice_registerInterfacePollSleep = 1000;
@@ -192,18 +196,39 @@ int main(int argc, char *argv[])
     IOTHUB_DEVICE_HANDLE deviceHandle = NULL; 
     DIGITALTWIN_DEVICE_CLIENT_HANDLE dtDeviceClientHandle = NULL;
     DIGITALTWIN_INTERFACE_CLIENT_HANDLE interfaceClientHandles[DIGITALTWIN_SAMPLE_DEVICE_MAX_INTERFACES];
+    AZUREDEVICEUPDATE_EMULATOR_SCENARIO scenario;
 #ifdef ENABLE_MODEL_DEFINITION_INTERFACE
     MODEL_DEFINITION_CLIENT_HANDLE modeldefClientHandle = NULL;
 #endif
+    char* makeAndModel = NULL;
 
     memset(&interfaceClientHandles, 0, sizeof(interfaceClientHandles));
 
-    if (argc != 2)
+    if (argc == 2)
     {
-        LogError("USAGE: digitaltwin_sample_device [IoTHub device connection string]");        
+        scenario = 3; // Default to scenario 3: all update steps (Download, Install, Apply) are successful 
+        makeAndModel = "Sample Model 123";
     }
+    else if (argc == 3)
+    {
+        scenario = strtol(argv[2], NULL, 10);
+        makeAndModel = "Sample Model 123";
+    }
+    else if (argc == 4)
+    {
+        scenario = strtol(argv[2], NULL, 10);
+        makeAndModel = strdup(argv[3]);
+    }
+    else 
+    {
+        LogError("USAGE: digitaltwin_sample_device [IoTHub device connection string] [optional: simulation scenario case 0-3] [optional: custom make and model]");  
+        return 0;     
+    }
+
+    LogInfo("Running PnP Device Emulator with Scenario: %d", scenario);
+
     // First, we create a standard IOTHUB_DEVICE_HANDLE handle for DigitalTwin to consume.
-    else if ((deviceHandle = DigitalTwinSampleDevice_InitializeIotHubDeviceHandle(argv[1], false)) == NULL)
+    if ((deviceHandle = DigitalTwinSampleDevice_InitializeIotHubDeviceHandle(argv[1], false)) == NULL)
     {
         LogError("Could not allocate IoTHub Device handle");
     }
@@ -230,6 +255,11 @@ int main(int argc, char *argv[])
     else if ((interfaceClientHandles[DIGITALTWIN_SAMPLE_ENVIRONMENTAL_SENSOR_INDEX] = DigitalTwinSampleEnvironmentalSensor_CreateInterface()) == NULL)
     {
         LogError("DigitalTwinSampleEnvironmentalSensor_CreateInterface failed");
+    }
+    // Invoke to create Environmental Sensor interface - implemented in a separate library - to create DIGITALTWIN_INTERFACE_CLIENT_HANDLE.
+    else if ((interfaceClientHandles[DIGITALTWIN_SAMPLE_AZURE_DEVICE_UPDATE_INDEX] = DigitalTwinSampleAzureDeviceUpdate_CreateInterface(scenario)) == NULL)
+    {
+        LogError("DigitalTwinSampleAzureDeviceUpdate_CreateInterface failed");
     }
 #ifdef ENABLE_MODEL_DEFINITION_INTERFACE
     // Invoke to create Model Definition interface - implemented in a separate library - to create DIGITALTWIN_INTERFACE_CLIENT_HANDLE.
@@ -269,6 +299,11 @@ int main(int argc, char *argv[])
             ThreadAPI_Sleep(digitalTwinSampleDevice_mainPollingInterval);
         }
         while (true);
+    }
+
+    if (interfaceClientHandles[DIGITALTWIN_SAMPLE_AZURE_DEVICE_UPDATE_INDEX] != NULL)
+    {
+        DigitalTwinSampleAzureDeviceUpdate_Close(interfaceClientHandles[DIGITALTWIN_SAMPLE_AZURE_DEVICE_UPDATE_INDEX]);
     }
 
     if (interfaceClientHandles[DIGITALTWIN_SAMPLE_ENVIRONMENTAL_SENSOR_INDEX] != NULL)

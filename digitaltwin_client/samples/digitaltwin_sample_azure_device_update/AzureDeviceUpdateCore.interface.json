@@ -1,0 +1,133 @@
+{
+    "@id": "urn:azureiot:AzureDeviceUpdateCore:1",
+    "@type": "Interface",
+    "description": "Azure Device Update Core",
+    "displayName": "Azure Device Update Core",
+    "contents": [
+        {
+            "@type": "Property",
+            "name": "UpdateClient",
+            "schema": "urn:azureiot:UpdateStateMetadata:1"
+        },
+        {
+            "@type": "Property",
+            "name": "CloudOrchestrator",
+            "schema": "urn:azureiot:UpdateActionMetadata:1",
+            "writable": true
+        }
+    ],
+    "schemas": [
+        {
+            "@id": "urn:azureiot:UpdateStateMetadata:1",
+            "@type": "Object",
+            "fields": [
+                {
+                    "name": "ResultCode",
+                    "schema": "integer"
+                },
+                {
+                    "name": "ExtendedResultCode",
+                    "schema": "integer"
+                },
+                {
+                    "name": "UpdateState",
+                    "schema": {
+                        "@type": "Enum",
+                        "valueSchema": "integer",
+                        "enumValues": [
+                            {
+                                "name": "Idle",
+                                "displayName": "Idle",
+                                "enumValue": 0
+                            },
+                            {
+                                "name": "DownloadStarted",
+                                "displayName": "DownloadStarted",
+                                "enumValue": 1
+                            },
+                            {
+                                "name": "DownloadSucceeded",
+                                "displayName": "DownloadSucceeded",
+                                "enumValue": 2
+                            },
+                            {
+                                "name": "InstallStarted",
+                                "displayName": "InstallStarted",
+                                "enumValue": 3
+                            },
+                            {
+                                "name": "InstallSucceeded",
+                                "displayName": "InstallSucceeded",
+                                "enumValue": 4
+                            },
+                            {
+                                "name": "ApplyStarted",
+                                "displayName": "ApplyStarted",
+                                "enumValue": 5
+                            },
+                            {
+                                "name": "Failed",
+                                "displayName": "Failed",
+                                "enumValue": 6
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "@id": "urn:azureiot:UpdateActionMetadata:1",
+            "@type": "Object",
+            "fields": [
+                {
+                    "name": "UpdateAction",
+                    "schema": {
+                        "@type": "Enum",
+                        "valueSchema": "integer",
+                        "enumValues": [
+                            {
+                                "name": "Download",
+                                "displayName": "Download",
+                                "enumValue": 0
+                            },
+                            {
+                                "name": "Install",
+                                "displayName": "Install",
+                                "enumValue": 1
+                            },
+                            {
+                                "name": "Apply",
+                                "displayName": "Apply",
+                                "enumValue": 2
+                            },
+                            {
+                                "name": "Cancel",
+                                "displayName": "Cancel",
+                                "enumValue": 3
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "TargetVersion",
+                    "schema": "string"
+                },
+                {
+                    "name": "Files",
+                    "schema": {
+                        "@type": "Map",
+                        "mapKey": {
+                            "name": "FileHash",
+                            "schema": "string"
+                        },
+                        "mapValue": {
+                            "name": "DownloadUri",
+                            "schema": "string"
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "@context": "http://azureiot.com/v1/contexts/Interface.json"
+}
