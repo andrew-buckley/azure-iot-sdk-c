@@ -217,7 +217,11 @@ int main(int argc, char *argv[])
     else if (argc == 4)
     {
         scenario = strtol(argv[2], NULL, 10);
-        makeAndModel = _strdup(argv[3]);
+        #ifdef _WIN32
+            makeAndModel = _strdup(argv[3]);
+        #else
+            makeAndModel = strdup(argv[3]);
+        #endif
     }
     else 
     {
