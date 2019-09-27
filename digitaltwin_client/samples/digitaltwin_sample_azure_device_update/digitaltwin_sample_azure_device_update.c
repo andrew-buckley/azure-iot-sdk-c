@@ -149,8 +149,8 @@ int DigitalTwinSampleAzureDeviceUpdate_SerializeData(DIGITALTWIN_SAMPLE_AZUREDEV
     //const char** states_ptr = STATES;
     const char** failures_ptr = FAILURE_MSG;
 
-    char **serialized_actions = (char**)malloc(5*sizeof(char*));
-    char **serialized_states = (char**)malloc(5*sizeof(char*));
+    //char **serialized_actions = (char**)malloc(5*sizeof(char*));
+    //char **serialized_states = (char**)malloc(5*sizeof(char*));
     char **serialized_failures = (char**)malloc(5*sizeof(char*));
 
     // generate proper JSON payload
@@ -489,8 +489,6 @@ static int DigitalTwinSampleAzureDeviceUpdate_ValidateUpdateAction(DIGITALTWIN_S
 {
     int result = 0;
 
-    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION i;
-
     // Parsing if the desired UpdateAction is a valid Enum value
     if (updateAction > cancel || updateAction < 0)
     {
@@ -724,7 +722,7 @@ static void DigitalTwinSampleAzureDeviceUpdate_UpdateCloudOrchestratorPropertyCa
     propertyResponse.responseVersion = dtClientPropertyUpdate->desiredVersion;
 
     // Get all properties
-    JSON_Value* root_value = json_parse_string(dtClientPropertyUpdate->propertyDesired);
+    JSON_Value* root_value = json_parse_string((const char*)(dtClientPropertyUpdate->propertyDesired));
     JSON_Object* root_object = json_value_get_object(root_value);
 
     // target version

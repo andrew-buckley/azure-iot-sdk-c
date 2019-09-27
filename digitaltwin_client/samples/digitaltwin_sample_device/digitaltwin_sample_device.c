@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     else if (argc == 4)
     {
         scenario = strtol(argv[2], NULL, 10);
-        makeAndModel = strdup(argv[3]);
+        makeAndModel = _strdup(argv[3]);
     }
     else 
     {
