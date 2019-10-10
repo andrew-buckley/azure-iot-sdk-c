@@ -15,15 +15,15 @@
 #include "./ops/azuredeviceupdate_ops.h"
 #include "parson.h"
 
-typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION_TAG
+typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_ACTION_TAG
 {
     download = 0,
     install,
     apply,
     cancel
-} DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION;
+} DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_ACTION;
 
-typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATESTATE_TAG
+typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_STATE_TAG
 {
     idle = 0,
     downloadStarted,
@@ -32,7 +32,7 @@ typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATESTATE_TAG
     installSucceeded,
     applyStarted,
     failed
-} DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATESTATE;
+} DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_STATE;
 
 typedef enum DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEFAILURE_TAG
 {
@@ -70,8 +70,8 @@ typedef struct DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE_TAG
     int failures_size;
     char* targetVersion;
     char* files;
-    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION updateAction;
-    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATESTATE updateState;
+    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_ACTION action;
+    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_STATE state;
     DIGITALTWIN_INTERFACE_CLIENT_HANDLE interfaceClientHandle;
     AZUREDEVICEUPDATE_EMULATOR_SCENARIO_PARAMS scenarioParameters;
     AZUREDEVICEUPDATE_EMULATOR_SCENARIO scenario;
@@ -80,22 +80,22 @@ typedef struct DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE_TAG
 
 // State for interface.  For simplicity we set this as a global and set during DigitalTwin_InterfaceClient_Create, but  
 // callbacks of this interface don't reference it directly but instead use userContextCallback passed to them.
-DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE digitaltwinSample_AzureDeviceUpdateState;
+DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE digitaltwinSample_AzureDeviceUpdateApplicationState;
 
 // DigitalTwin interface name from service perspective.
 static const char digitaltwinSampleAzureDeviceUpdate_InterfaceId[] = "urn:azureiot:AzureDeviceUpdateCore:1";
 static const char digitaltwinSampleAzureDeviceUpdate_InterfaceName[] = "azureDeviceUpdateCore";
 
-// Device to cloud (read-only) property and field names (UpdateClient)
-static const char digitaltwinSample_UpdateClientProperty[] = "UpdateClient";
-static const char digitaltwinSample_UpdateStateField[] = "UpdateState";
+// Device to cloud (read-only) property and field names (Client)
+static const char digitaltwinSample_ClientProperty[] = "Client";
+static const char digitaltwinSample_StateField[] = "State";
 static const char digitaltwinSample_ResultCodeField[] = "ResultCode";
 static const char digitaltwinSample_ExtendedResultCodeField[] = "ExtendedResultCode";
 
-// Cloud to device (writable) property and field names (CouldOrchestrator)
-static const char digitaltwinSample_CloudOrchestratorProperty[] = "CloudOrchestrator";
+// Cloud to device (writable) property and field names (CloudOrchestrator)
+static const char digitaltwinSample_OrchestratorProperty[] = "Orchestrator";
 static const char digitaltwinSample_TargetVersionField[] = "TargetVersion";
-static const char digitaltwinSample_UpdateActionField[] = "UpdateAction";
+static const char digitaltwinSample_ActionField[] = "Action";
 static const char digitaltwinSample_FilesField[] = "Files";
 
 void wait(int seconds)
@@ -139,11 +139,11 @@ AZUREDEVICEUPDATE_EMULATOR_SCENARIO_PARAMS DigitalTwinSampleAzureDeviceUpdate_In
     return scenarioParameters;
 }
 
-int DigitalTwinSampleAzureDeviceUpdate_SerializeData(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state)
+int DigitalTwinSampleAzureDeviceUpdate_SerializeData(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState)
 {
-    //state->actions_size =  sizeof(ACTIONS)/sizeof(ACTIONS[0]);
-    //state->states_size =  sizeof(STATES)/sizeof(STATES[0]);
-    state->failures_size =  sizeof(FAILURE_MSG)/sizeof(FAILURE_MSG[0]);
+    //applicationState->actions_size =  sizeof(ACTIONS)/sizeof(ACTIONS[0]);
+    //applicationState->states_size =  sizeof(STATES)/sizeof(STATES[0]);
+    applicationState->failures_size =  sizeof(FAILURE_MSG)/sizeof(FAILURE_MSG[0]);
 
    // const char** actions_ptr = ACTIONS;
     //const char** states_ptr = STATES;
@@ -154,14 +154,14 @@ int DigitalTwinSampleAzureDeviceUpdate_SerializeData(DIGITALTWIN_SAMPLE_AZUREDEV
     char **serialized_failures = (char**)malloc(5*sizeof(char*));
 
     // generate proper JSON payload
-    if (/*(ADU_serializeStringArrayData(actions_ptr, serialized_actions, state->actions_size) == RESULT_OK) && */
-        /*(ADU_serializeStringArrayData(states_ptr, serialized_states, state->states_size) == RESULT_OK) && */
-        (ADU_serializeStringArrayData(failures_ptr, serialized_failures, state->failures_size) == RESULT_OK))
+    if (/*(ADU_serializeStringArrayData(actions_ptr, serialized_actions, applicationState->actions_size) == RESULT_OK) && */
+        /*(ADU_serializeStringArrayData(states_ptr, serialized_states, applicationState->states_size) == RESULT_OK) && */
+        (ADU_serializeStringArrayData(failures_ptr, serialized_failures, applicationState->failures_size) == RESULT_OK))
     {
         LogInfo("AZURE_DEVICE_UPDATE: Serialized ACTIONS, STATES, and FAILURES");
-        //state->serializedActions = serialized_actions;
-        //state->serializedStates = serialized_states;
-        state->serializedFailures = serialized_failures;
+        //applicationState->serializedActions = serialized_actions;
+        //applicationState->serializedStates = serialized_states;
+        applicationState->serializedFailures = serialized_failures;
     }
     else
     {
@@ -231,7 +231,7 @@ static DIGITALTWIN_CLIENT_RESULT DigitalTwinSampleAzureDeviceUpdate_ReportProper
     return result;
 }
 
-static void ReportUpdateClientHelperWithoutResponse(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state, const char* fieldName, int value)
+static void ReportClientHelperWithoutResponse(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState, const char* fieldName, int value)
 {
     // Report the new update state property
     JSON_Value* root_value = json_value_init_object();
@@ -240,7 +240,7 @@ static void ReportUpdateClientHelperWithoutResponse(DIGITALTWIN_SAMPLE_AZUREDEVI
     json_object_set_number(root_object, fieldName, value);
     serialized_string = json_serialize_to_string(root_value);
 
-    DigitalTwinSampleAzureDeviceUpdate_ReportPropertyWithoutResponse(state->interfaceClientHandle, digitaltwinSample_UpdateClientProperty,
+    DigitalTwinSampleAzureDeviceUpdate_ReportPropertyWithoutResponse(applicationState->interfaceClientHandle, digitaltwinSample_ClientProperty,
         serialized_string);
 
     json_free_serialized_string(serialized_string);
@@ -305,55 +305,55 @@ static DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATERESULT DigitalTwinSampleAzureD
 }
 
 //
-// DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail implements the Fail logic of the Update State Machine by reporting its UpdateState, ErrorCode, and Message properties to the Twin. 
+// DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail implements the Fail logic of the Update State Machine by reporting its State, ErrorCode, and Message properties to the Twin. 
 //
-static void DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state, int resultCode, int extendedResultCode)
+static void DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState, int resultCode, int extendedResultCode)
 {
-    state->updateState = failed;
-    ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+    applicationState->state = failed;
+    ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
-    ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_ResultCodeField, resultCode);
+    ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_ResultCodeField, resultCode);
 
-    ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_ExtendedResultCodeField, extendedResultCode);
+    ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_ExtendedResultCodeField, extendedResultCode);
 }
 
 //
 // DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download implements the Download logic of the Update State Machine by validating the UpdateName, TargetVersion, UpdateManifest, and Files properties and initiating the "Download Started" state if valid. 
 // If Download Failed, Update State Machine goes into "Failed" state and "Download Completed" state if Download succeeded.
 //
-static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state)
+static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState)
 {
     int result = 0;
     DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATERESULT updateResult;
 
      // Go to "Download Started" state only if currently in "Idle" state and properties UpdateName, TargetVersion, UpdateManifest, and Files are valid.
-    if (state->updateState == idle && state->targetVersion != NULL && state->files != NULL)
+    if (applicationState->state == idle && applicationState->targetVersion != NULL && applicationState->files != NULL)
     {
-        state->updateState = downloadStarted;
+        applicationState->state = downloadStarted;
 
         // Report the new update state property
-        ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+        ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
         // TODO: Process properties
-        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Target Version is %s", state->targetVersion); 
-        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Files are %s", state->files);
+        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Target Version is %s", applicationState->targetVersion);
+        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Files are %s", applicationState->files);
 
         // Initiate Download
-        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateDownload(state->scenarioParameters.download);
+        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateDownload(applicationState->scenarioParameters.download);
 
         if (updateResult == downloadFailedResult)
         {
-            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Download failed with failure=<%s>", state->serializedFailures[downloadFailure]);
+            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Download failed with failure=<%s>", applicationState->serializedFailures[downloadFailure]);
             int resultCode = 502;
             int extendedResultCode = 900;
-            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(state, resultCode, extendedResultCode);
+            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(applicationState, resultCode, extendedResultCode);
         }
         else if (updateResult == downloadSuccessfulResult)
         {
-            state->updateState = downloadSucceeded;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Download succeeded with updateState=<%d>", state->updateState);
+            applicationState->state = downloadSucceeded;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Download succeeded with state=<%d>", applicationState->state);
             // Report the new update state property
-            ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+            ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
         }
         else
         {
@@ -363,9 +363,9 @@ static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(DIGITALTWIN_
     else
     {
         LogError("AZURE_DEVICE_UPDATE_INTERFACE: Make sure STATE is idle and TargetVersion or Files are not NULL");
-        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Update State is %d", state->updateState);
-        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Target Version is %s", state->targetVersion);
-        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Files are %s", state->files);
+        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Update State is %d", applicationState->state);
+        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Target Version is %s", applicationState->targetVersion);
+        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Files are %s", applicationState->files);
         result = MU_FAILURE;
     }
 
@@ -376,32 +376,32 @@ static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(DIGITALTWIN_
 // DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install implements the Install logic of the Update State Machine and initiates the "Installation Started" state. 
 // If Installation Failed, Update State Machine goes into "Failed" state and "Installation Completed" state if Installation succeeded.
 //
-static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state)
+static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState)
 {
     int result = 0;
     DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATERESULT updateResult;
 
     // Go to "Installation Started" state only if currently in "Download Completed" state.
-    if (state->updateState == downloadSucceeded) 
+    if (applicationState->state == downloadSucceeded)
     {
-        state->updateState = installStarted;
-        ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+        applicationState->state = installStarted;
+        ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
         // Initiate Install
-        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateInstallation(state->scenarioParameters.installation);
+        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateInstallation(applicationState->scenarioParameters.installation);
 
         if (updateResult == installationFailedResult)
         {
-            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Installation failed with failure=<%s>", state->serializedFailures[installFailure]);
+            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Installation failed with failure=<%s>", applicationState->serializedFailures[installFailure]);
             int resultCode = 503;
             int extendedResultCode = 900;
-            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(state, resultCode, extendedResultCode);
+            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(applicationState, resultCode, extendedResultCode);
         }
         else if (updateResult == installationSuccessfulResult)
         {
-            state->updateState = installSucceeded;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Installation succeeded with updateState=<%d>", state->updateState);
-            ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+            applicationState->state = installSucceeded;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Installation succeeded with state=<%d>", applicationState->state);
+            ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
         }
         else 
@@ -422,37 +422,37 @@ static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install(DIGITALTWIN_S
 // DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply implements the Apply logic of the Update State Machine and initiates the "Apply Started" state.
 // If Apply Failed, Update State Machine goes into "Failed" state and "Idle" state if Apply succeeded. 
 //
-static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state)
+static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState)
 {
     int result = 0;
     DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATERESULT updateResult;
 
     // Go to "Apply Started" state only if currently in "Installation Completed" state.
-    if (state->updateState == installSucceeded) 
+    if (applicationState->state == installSucceeded)
     {
-        state->updateState = applyStarted;
-        ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+        applicationState->state = applyStarted;
+        ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
         // Initiate Apply
-        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateApplication(state->scenarioParameters.application);
+        updateResult = DigitalTwinSampleAzureDeviceUpdate_SimulateApplication(applicationState->scenarioParameters.application);
 
         if (updateResult == applyFailedResult)
         {
-            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Application failed with failure=: %s", state->serializedFailures[applyFailure]);
+            LogError("AZURE_DEVICE_UPDATE_INTERFACE: Application failed with failure=: %s", applicationState->serializedFailures[applyFailure]);
             int resultCode = 504;
             int extendedResultCode = 900;
-            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(state, resultCode, extendedResultCode);
+            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Fail(applicationState, resultCode, extendedResultCode);
         }
         else if (updateResult == applySuccessfulResult)
         {
-            state->updateState = idle;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Application succeeded with updateState=<%d>", state->updateState);
-            ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+            applicationState->state = idle;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Application succeeded with state=<%d>", applicationState->state);
+            ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 
             /** Update "swVersion" of the Device Information interface. 
             TODO: Note that this procedure wouldn't be necessary on a real device
             */
-            JSON_Value* root_value = json_value_init_string(state->targetVersion);
+            JSON_Value* root_value = json_value_init_string(applicationState->targetVersion);
             char* serialized_string = json_serialize_to_string(root_value);
             LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Calling DeviceInformation interface to update property swVersion with <%s>", serialized_string);
             DeviceInfo_updateSwVersion(serialized_string);
@@ -476,61 +476,61 @@ static int DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply(DIGITALTWIN_SAM
 //
 // DigitalTwinSampleAzureDeviceUpdate_StateMachine_Cancel implements the Cancel logic of the Update State Machine by returning to the "Idle" state under any conditions. 
 //
-static void DigitalTwinSampleAzureDeviceUpdate_StateMachine_Cancel(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state)
+static void DigitalTwinSampleAzureDeviceUpdate_StateMachine_Cancel(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState)
 {
-    state->updateState = idle;
-    ReportUpdateClientHelperWithoutResponse(state, digitaltwinSample_UpdateStateField, state->updateState);
+    applicationState->state = idle;
+    ReportClientHelperWithoutResponse(applicationState, digitaltwinSample_StateField, applicationState->state);
 }
 
 //
-// DigitalTwinSampleAzureDeviceUpdate_ValidateUpdateAction validates an UpdateAction property update (Download, Install, Apply, or Cancel)
+// DigitalTwinSampleAzureDeviceUpdate_ValidateAction validates an Action property update (Download, Install, Apply, or Cancel)
 //
-static int DigitalTwinSampleAzureDeviceUpdate_ValidateUpdateAction(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION updateAction)
+static int DigitalTwinSampleAzureDeviceUpdate_ValidateAction(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_ACTION action)
 {
     int result = 0;
 
-    // Parsing if the desired UpdateAction is a valid Enum value
-    if (updateAction > cancel || updateAction < 0)
+    // Parsing if the desired Action is a valid Enum value
+    if (action > cancel || action < 0)
     {
-        LogError("Could not parse data=<%d> invalid", (int) updateAction);
+        LogError("Could not parse data=<%d> invalid", (int) action);
         result = MU_FAILURE;
     }
     else
     {
-        state->updateAction = updateAction;
+        applicationState->action = action;
     }
 
     return result;
 }
 
 //
-// DigitalTwinSampleAzureDeviceUpdate_ProcessUpdateAction parses an UpdateAction property update and initiates approapriate Update State Machine logic (Download, Install, Apply, Fail, or Cancel)
+// DigitalTwinSampleAzureDeviceUpdate_ProcessAction parses an Action property update and initiates approapriate Update State Machine logic (Download, Install, Apply, Fail, or Cancel)
 //
-static int DigitalTwinSampleAzureDeviceUpdate_ProcessUpdateAction(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state)
+static int DigitalTwinSampleAzureDeviceUpdate_ProcessAction(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState)
 {
     int result = 0;
 
-    switch (state->updateAction)
+    switch (applicationState->action)
     {
         case download:
-            state->updateAction = download;
-            LogInfo("AZURE_DEVICE_UPDATE: current state=<%d>", state->updateState);
-            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(state);
+            applicationState->action = download;
+            LogInfo("AZURE_DEVICE_UPDATE: current state=<%d>", applicationState->state);
+            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Download(applicationState);
             break;
         case install:
-            state->updateAction = install;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", state->updateState);
-            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install(state);
+            applicationState->action = install;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", applicationState->state);
+            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Install(applicationState);
             break;
         case apply:
-            state->updateAction = apply;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", state->updateState);
-            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply(state);
+            applicationState->action = apply;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", applicationState->state);
+            result = DigitalTwinSampleAzureDeviceUpdate_StateMachine_Apply(applicationState);
             break;
         case cancel:
-            state->updateAction = cancel;
-            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", state->updateState);
-            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Cancel(state);
+            applicationState->action = cancel;
+            LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: current state=<%d>", applicationState->state);
+            DigitalTwinSampleAzureDeviceUpdate_StateMachine_Cancel(applicationState);
             break;
         default:
             result = MU_FAILURE;
@@ -544,7 +544,7 @@ static int DigitalTwinSampleAzureDeviceUpdate_ProcessUpdateAction(DIGITALTWIN_SA
 // is successfully or unsuccessfully registered with the service, and also when the interface is deleted.
 static void DigitalTwinSampleAzureDeviceUpdate_InterfaceRegisteredCallback(DIGITALTWIN_CLIENT_RESULT dtInterfaceStatus, void* userInterfaceContext)
 {
-    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *state = (DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE*)userInterfaceContext;
+    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE *applicationState = (DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE*)userInterfaceContext;
     if (dtInterfaceStatus == DIGITALTWIN_CLIENT_OK)
     {
         // Once the interface is registered, send our reported properties to the service.  
@@ -554,24 +554,24 @@ static void DigitalTwinSampleAzureDeviceUpdate_InterfaceRegisteredCallback(DIGIT
 
         // serialize legal JSON payloads
         // TODO: Might not need
-        DigitalTwinSampleAzureDeviceUpdate_SerializeData(state);
+        DigitalTwinSampleAzureDeviceUpdate_SerializeData(applicationState);
 
         // Create initial update client json string
         JSON_Value* root_value = json_value_init_object();
         JSON_Object* root_object = json_value_get_object(root_value);
         char* serialized_string = NULL;
-        json_object_set_number(root_object, digitaltwinSample_UpdateStateField, idle);
+        json_object_set_number(root_object, digitaltwinSample_StateField, idle);
         json_object_set_number(root_object, digitaltwinSample_ResultCodeField, 0);
         json_object_set_number(root_object, digitaltwinSample_ExtendedResultCodeField, 0);
         serialized_string = json_serialize_to_string(root_value);
 
         //Initialize device in "Idle" state
-        DigitalTwinSampleAzureDeviceUpdate_ReportPropertyWithoutResponse(state->interfaceClientHandle, digitaltwinSample_UpdateClientProperty, 
+        DigitalTwinSampleAzureDeviceUpdate_ReportPropertyWithoutResponse(applicationState->interfaceClientHandle, digitaltwinSample_ClientProperty,
                                                       serialized_string);
         json_free_serialized_string(serialized_string);
         json_value_free(root_value);
         
-        state->updateState = idle;
+        applicationState->state = idle;
     }
     else if (dtInterfaceStatus == DIGITALTWIN_CLIENT_ERROR_INTERFACE_UNREGISTERING)
     {
@@ -587,11 +587,11 @@ static void DigitalTwinSampleAzureDeviceUpdate_InterfaceRegisteredCallback(DIGIT
 //
 // Process a property field update, which the server initiated, for the TargetVersion field.
 //
-static void DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(const char* targetVersion, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state) 
+static void DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(const char* targetVersion, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState)
 {
     DIGITALTWIN_CLIENT_PROPERTY_RESPONSE propertyResponse;
 
-    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: CloudOrchestrator property field TargetValue invoked with data=<%.*s>", (int) sizeof(targetVersion), targetVersion);
+    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Orchestrator property field TargetValue invoked with data=<%.*s>", (int) sizeof(targetVersion), targetVersion);
 
     propertyResponse.version = DIGITALTWIN_CLIENT_PROPERTY_RESPONSE_VERSION_1;
     propertyResponse.responseVersion = dtClientPropertyUpdate->desiredVersion;
@@ -602,8 +602,8 @@ static void DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(con
     json_object_set_string(root_object, digitaltwinSample_TargetVersionField, targetVersion);
     partial_property_update_string = json_serialize_to_string(root_value);
 
-    free(state->targetVersion);
-    if ((state->targetVersion = (char*)malloc(sizeof(targetVersion))) == NULL)
+    free(applicationState->targetVersion);
+    if (mallocAndStrcpy_s(&(applicationState->targetVersion), targetVersion) != 0)
     {
         // Indicates failure with additional human readable information about status.
         LogError("AZURE_DEVICE_UPDATE_INTERFACE: Out of memory updating TargetVersion.");
@@ -612,24 +612,22 @@ static void DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(con
     }
     else
     {
-        strncpy_s(state->targetVersion, sizeof(state->targetVersion), targetVersion, sizeof(targetVersion));
-
         // Indicates success with optional additional human readable information about status.
         LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: TargetVersion successfully updated.");
         propertyResponse.statusCode = 200;
         propertyResponse.statusDescription = "Property updated successfully";
     }
 
-    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(state->interfaceClientHandle, digitaltwinSample_CloudOrchestratorProperty, partial_property_update_string, &propertyResponse);
+    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(applicationState->interfaceClientHandle, digitaltwinSample_OrchestratorProperty, partial_property_update_string, &propertyResponse);
     json_free_serialized_string(partial_property_update_string);
     json_value_free(root_value);
 }
 
-static void DigitalTwinSampleAzureDeviceUpdate_UpdateActionPropertyCallback(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_UPDATEACTION updateAction, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state)
+static void DigitalTwinSampleAzureDeviceUpdate_ActionPropertyCallback(DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_ACTION action, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState)
 {
     DIGITALTWIN_CLIENT_PROPERTY_RESPONSE propertyResponse;
 
-    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: CloudOrchestrator property field UpdateAction invoked with data=<%d>", updateAction);
+    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Orchestrator property field Action invoked with data=<%d>", action);
 
     propertyResponse.version = DIGITALTWIN_CLIENT_PROPERTY_UPDATE_VERSION_1;
     propertyResponse.responseVersion = dtClientPropertyUpdate->desiredVersion;
@@ -637,42 +635,42 @@ static void DigitalTwinSampleAzureDeviceUpdate_UpdateActionPropertyCallback(DIGI
     JSON_Value* root_value = json_value_init_object();
     JSON_Object* root_object = json_value_get_object(root_value);
     char* partial_property_update_string = NULL;
-    json_object_set_number(root_object, digitaltwinSample_UpdateActionField, updateAction);
+    json_object_set_number(root_object, digitaltwinSample_ActionField, action);
     partial_property_update_string = json_serialize_to_string(root_value);
 
     // Process the action 
-    if (DigitalTwinSampleAzureDeviceUpdate_ValidateUpdateAction(state, updateAction) != 0)
+    if (DigitalTwinSampleAzureDeviceUpdate_ValidateAction(applicationState, action) != 0)
     {
         // Indicates failure with additional human readable information about status.
-        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Invalid UpdateAction=<%d> specified", updateAction);
+        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Invalid Action=<%d> specified", action);
         propertyResponse.statusCode = 505;
-        propertyResponse.statusDescription = "Invalid UpdateAction";
+        propertyResponse.statusDescription = "Invalid Action";
     }
-    else if (DigitalTwinSampleAzureDeviceUpdate_ProcessUpdateAction(state) != 0)
+    else if (DigitalTwinSampleAzureDeviceUpdate_ProcessAction(applicationState) != 0)
     {
-        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Invalid UpdateAction=<%d> specified", updateAction);
+        LogError("AZURE_DEVICE_UPDATE_INTERFACE: Invalid Action=<%d> specified", action);
         propertyResponse.statusCode = 506;
-        propertyResponse.statusDescription = "Error processing UpdateAction";
+        propertyResponse.statusDescription = "Error processing Action";
     }
     else
     {
         // Indicates success with optional additional human readable information about status.
-        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: UpdateAction successfully updated.");
+        LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Action successfully updated.");
         propertyResponse.statusCode = 200;
         propertyResponse.statusDescription = "Property updated successfully";
     }
 
-    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(state->interfaceClientHandle, digitaltwinSample_CloudOrchestratorProperty, partial_property_update_string, &propertyResponse);
+    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(applicationState->interfaceClientHandle, digitaltwinSample_OrchestratorProperty, partial_property_update_string, &propertyResponse);
     json_free_serialized_string(partial_property_update_string);
     json_value_free(root_value);
 }
 
-static void DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(JSON_Value* files, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state)
+static void DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(JSON_Value* files, const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState)
 {
     DIGITALTWIN_CLIENT_PROPERTY_RESPONSE propertyResponse;
     char* files_serialized = json_serialize_to_string(files);
 
-    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: CloudOrchestrator property field Files invoked with data=<%s>", files_serialized);
+    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Orchestrator property field Files invoked with data=<%s>", files_serialized);
 
     propertyResponse.version = DIGITALTWIN_CLIENT_PROPERTY_RESPONSE_VERSION_1;
     propertyResponse.responseVersion = dtClientPropertyUpdate->desiredVersion;
@@ -683,8 +681,8 @@ static void DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(JSON_Value*
     json_object_set_value(root_object, digitaltwinSample_FilesField, files);
     partial_property_update_string = json_serialize_to_string(root_value);
 
-    free(state->files);
-    if ((state->files = (char*)malloc(sizeof(files_serialized))) == NULL)
+    free(applicationState->files);
+    if (mallocAndStrcpy_s(&(applicationState->files), files_serialized) != 0)
     {
         // Indicates failure with additional human readable information about status.
         LogError("AZURE_DEVICE_UPDATE_INTERFACE: Out of memory updating Files.");
@@ -693,29 +691,27 @@ static void DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(JSON_Value*
     }
     else
     {
-        strncpy_s(state->files, sizeof(state->files), files_serialized, sizeof(files_serialized));
-
-         // Indicates success with optional additional human readable information about status.
+        // Indicates success with optional additional human readable information about status.
         LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Files successfully updated.");
         propertyResponse.statusCode = 200;
         propertyResponse.statusDescription = "Property updated successfully";
     }
 
-    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(state->interfaceClientHandle, digitaltwinSample_CloudOrchestratorProperty, partial_property_update_string, &propertyResponse);
+    DigitalTwinSampleAzureDeviceUpdate_ReportProperty(applicationState->interfaceClientHandle, digitaltwinSample_OrchestratorProperty, partial_property_update_string, &propertyResponse);
     json_free_serialized_string(files_serialized);
     json_free_serialized_string(partial_property_update_string);
     json_value_free(root_value);
 }
 
 // 
-// Process a property update, which the server initiated, for the CloudOrchestrator property.
+// Process a property update, which the server initiated, for the Orchestrator property.
 //
-static void DigitalTwinSampleAzureDeviceUpdate_UpdateCloudOrchestratorPropertyCallback(const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, void* userInterfaceContext)
+static void DigitalTwinSampleAzureDeviceUpdate_UpdateOrchestratorPropertyCallback(const DIGITALTWIN_CLIENT_PROPERTY_UPDATE* dtClientPropertyUpdate, void* userInterfaceContext)
 {
-    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* state = (DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE*)userInterfaceContext;
+    DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE* applicationState = (DIGITALTWIN_SAMPLE_AZUREDEVICEUPDATE_APPLICATIONSTATE*)userInterfaceContext;
     DIGITALTWIN_CLIENT_PROPERTY_RESPONSE propertyResponse;
 
-    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: CloudOrchestrator property invoked with data=<%.*s>", (int)dtClientPropertyUpdate->propertyDesiredLen, dtClientPropertyUpdate->propertyDesired);
+    LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Orchestrator property invoked with data=<%.*s>", (int)dtClientPropertyUpdate->propertyDesiredLen, dtClientPropertyUpdate->propertyDesired);
 
     // Version of this structure for C SDK.
     propertyResponse.version = DIGITALTWIN_CLIENT_PROPERTY_RESPONSE_VERSION_1;
@@ -729,7 +725,7 @@ static void DigitalTwinSampleAzureDeviceUpdate_UpdateCloudOrchestratorPropertyCa
     const char* targetVersion = NULL;
     if((targetVersion = json_object_get_string(root_object, digitaltwinSample_TargetVersionField)) != NULL)
     {
-        DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(targetVersion, dtClientPropertyUpdate, state);
+        DigitalTwinSampleAzureDeviceUpdate_TargetVersionPropertyCallback(targetVersion, dtClientPropertyUpdate, applicationState);
     }
 
     // files
@@ -737,15 +733,15 @@ static void DigitalTwinSampleAzureDeviceUpdate_UpdateCloudOrchestratorPropertyCa
     if (json_object_has_value(root_object, digitaltwinSample_FilesField))
     {
         files = json_object_get_value(root_object, digitaltwinSample_FilesField);
-        DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(files, dtClientPropertyUpdate, state);
+        DigitalTwinSampleAzureDeviceUpdate_FilesPropertyCallback(files, dtClientPropertyUpdate, applicationState);
     }
 
     // update action
-    double updateAction = -1;
-    if (json_object_has_value(root_object, digitaltwinSample_UpdateActionField))
+    double action = -1;
+    if (json_object_has_value(root_object, digitaltwinSample_ActionField))
     {
-        updateAction = json_object_get_number(root_object, digitaltwinSample_UpdateActionField);
-        DigitalTwinSampleAzureDeviceUpdate_UpdateActionPropertyCallback(updateAction, dtClientPropertyUpdate, state);
+        action = json_object_get_number(root_object, digitaltwinSample_ActionField);
+        DigitalTwinSampleAzureDeviceUpdate_ActionPropertyCallback(action, dtClientPropertyUpdate, applicationState);
     }
 
     json_value_free(root_value);
@@ -765,9 +761,9 @@ void DigitalTwinSampleAzureDeviceUpdate_ProcessPropertyUpdate(const DIGITALTWIN_
     const char *propertyDesired = (const char*) dtClientPropertyUpdate->propertyDesired;
     LogInfo("AZURE_DEVICE_UPDATE_INTERFACE: Property callback succeeds. Updating desired propertyName=<%s> with value=<%s>", propertyName, propertyDesired);
 
-    if (strcmp(dtClientPropertyUpdate->propertyName, digitaltwinSample_CloudOrchestratorProperty) == 0)
+    if (strcmp(dtClientPropertyUpdate->propertyName, digitaltwinSample_OrchestratorProperty) == 0)
     {
-        DigitalTwinSampleAzureDeviceUpdate_UpdateCloudOrchestratorPropertyCallback(dtClientPropertyUpdate, userInterfaceContext);
+        DigitalTwinSampleAzureDeviceUpdate_UpdateOrchestratorPropertyCallback(dtClientPropertyUpdate, userInterfaceContext);
     }
     else
     {
@@ -781,15 +777,15 @@ DIGITALTWIN_INTERFACE_CLIENT_HANDLE DigitalTwinSampleAzureDeviceUpdate_CreateInt
     DIGITALTWIN_CLIENT_RESULT result;
     DIGITALTWIN_INTERFACE_CLIENT_HANDLE interfaceHandle;
 
-    memset(&digitaltwinSample_AzureDeviceUpdateState, 0, sizeof(digitaltwinSample_AzureDeviceUpdateState));
+    memset(&digitaltwinSample_AzureDeviceUpdateApplicationState, 0, sizeof(digitaltwinSample_AzureDeviceUpdateApplicationState));
 
     // Initialize this device emulator with the desired parameters for a specific scenario to simulate
-    digitaltwinSample_AzureDeviceUpdateState.scenarioParameters = DigitalTwinSampleAzureDeviceUpdate_InitializeSimulationScenario(scenario);
+    digitaltwinSample_AzureDeviceUpdateApplicationState.scenarioParameters = DigitalTwinSampleAzureDeviceUpdate_InitializeSimulationScenario(scenario);
 
     if ((result = DigitalTwin_InterfaceClient_Create(digitaltwinSampleAzureDeviceUpdate_InterfaceId, 
         digitaltwinSampleAzureDeviceUpdate_InterfaceName, 
         DigitalTwinSampleAzureDeviceUpdate_InterfaceRegisteredCallback, 
-        &digitaltwinSample_AzureDeviceUpdateState, &interfaceHandle)) != DIGITALTWIN_CLIENT_OK)
+        &digitaltwinSample_AzureDeviceUpdateApplicationState, &interfaceHandle)) != DIGITALTWIN_CLIENT_OK)
     {
         LogError("AZURE_DEVICE_UPDATE: Unable to allocate interface client handle for interfaceId=<%s>, interfaceName=<%s>, error=<%s>", digitaltwinSampleAzureDeviceUpdate_InterfaceId, digitaltwinSampleAzureDeviceUpdate_InterfaceName, MU_ENUM_TO_STRING(DIGITALTWIN_CLIENT_RESULT, result));
         interfaceHandle = NULL;
@@ -802,7 +798,7 @@ DIGITALTWIN_INTERFACE_CLIENT_HANDLE DigitalTwinSampleAzureDeviceUpdate_CreateInt
     }
     else
     {
-        digitaltwinSample_AzureDeviceUpdateState.interfaceClientHandle = interfaceHandle;
+        digitaltwinSample_AzureDeviceUpdateApplicationState.interfaceClientHandle = interfaceHandle;
         LogInfo("AZURE_DEVICE_UPDATE: Created DIGITALTWIN_INTERFACE_CLIENT_HANDLE.  interfaceId=<%s>, interfaceName=<%s>, handle=<%p>", digitaltwinSampleAzureDeviceUpdate_InterfaceId, digitaltwinSampleAzureDeviceUpdate_InterfaceName, interfaceHandle);
     }
 
@@ -824,9 +820,9 @@ void DigitalTwinSampleAzureDeviceUpdate_Close(DIGITALTWIN_INTERFACE_CLIENT_HANDL
     // resources callbacks otherwise may have needed.
     // This is a no-op in this simple sample.
 
-    free(digitaltwinSample_AzureDeviceUpdateState.targetVersion);
-    digitaltwinSample_AzureDeviceUpdateState.targetVersion = NULL;
+    free(digitaltwinSample_AzureDeviceUpdateApplicationState.targetVersion);
+    digitaltwinSample_AzureDeviceUpdateApplicationState.targetVersion = NULL;
 
-    free(digitaltwinSample_AzureDeviceUpdateState.files);
-    digitaltwinSample_AzureDeviceUpdateState.files = NULL;
+    free(digitaltwinSample_AzureDeviceUpdateApplicationState.files);
+    digitaltwinSample_AzureDeviceUpdateApplicationState.files = NULL;
 }
